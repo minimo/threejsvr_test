@@ -4,6 +4,8 @@
   var width  = window.innerWidth;
   var height = window.innerHeight;
 
+  var isFullScreen = false;
+
   // カメラ
   var camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
   camera.position.set(0, 10, 20);
@@ -62,7 +64,8 @@
 
   // ボタンクリック
   document.getElementById('btn').addEventListener('click', function () {
-      effect.setFullScreen(true);
+      isFullScreen = !isFullScreen;
+      effect.setFullScreen(isFullScreen);
   }, false);
 
 }());
