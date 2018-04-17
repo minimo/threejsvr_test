@@ -7,41 +7,55 @@ THREE.VRControls = function ( object, onError ) {
 
 	var scope = this;
 
-	var vrDisplay, vrDisplays;
+	var vrInputs = [];
 
-	var standingMatrix = new THREE.Matrix4();
+	function filterInvalidDevices( devices ) {
 
-	var frameData = null;
+		// Exclude Cardboard position sensor if Oculus exists.
 
-	if ( 'VRFrameData' in window ) {
+		var oculusDevices = devices.filter( function ( device ) {
 
-		frameData = new VRFrameData();
+			return device.deviceName.toLowerCase().indexOf('oculus') !== -1;
 
-	}
+		} );
 
-	function gotVRDisplays( displays ) {
+		if ( oculusDevices.length >= 1 ) {
 
-		vrDisplays = displays;
+			return devices.filter( function ( device ) {
 
-		if ( displays.length > 0 ) {
+				return device.deviceName.toLowerCase().indexOf('cardboard') === -1;
 
-			vrDisplay = displays[ 0 ];
+			} );
 
 		} else {
 
-			if ( onError ) onError( 'VR input not available.' );
+			return devices;
 
 		}
 
 	}
 
-	if ( navigator.getVRDisplays ) {
+	function gotVRDevices( devices ) {
 
-		navigator.getVRDisplays().then( gotVRDisplays ).catch( function () {
+		devices = filterInvalidDevices( devices );
 
-			console.warn( 'THREE.VRControls: Unable to get VR Displays' );
+		for ( var i = 0; i < devices.length; i ++ ) {
 
-		} );
+			if ( devices[ i ] instanceof PositionSensorVRDevice ) {
+
+				vrInputs.push( devices[ i ] );
+
+			}
+
+		}
+
+		if ( onError ) onError( 'HMD not available' );
+
+	}
+
+	if ( navigator.getVRDevices ) {
+
+		navigator.getVRDevices().then( gotVRDevices );
 
 	}
 
@@ -51,98 +65,54 @@ THREE.VRControls = function ( object, onError ) {
 
 	this.scale = 1;
 
-	// If true will use "standing space" coordinate system where y=0 is the
-	// floor and x=0, z=0 is the center of the room.
-	this.standing = false;
-
-	// Distance from the users eyes to the floor in meters. Used when
-	// standing=true but the VRDisplay doesn't provide stageParameters.
-	this.userHeight = 1.6;
-
-	this.getVRDisplay = function () {
-
-		return vrDisplay;
-
-	};
-
-	this.setVRDisplay = function ( value ) {
-
-		vrDisplay = value;
-
-	};
-
-	this.getVRDisplays = function () {
-
-		console.warn( 'THREE.VRControls: getVRDisplays() is being deprecated.' );
-		return vrDisplays;
-
-	};
-
-	this.getStandingMatrix = function () {
-
-		return standingMatrix;
-
-	};
-
 	this.update = function () {
 
-		if ( vrDisplay ) {
+		for ( var i = 0; i < vrInputs.length; i ++ ) {
 
-			var pose;
+			var vrInput = vrInputs[ i ];
 
-			if ( vrDisplay.getFrameData ) {
+			var state = vrInput.getState();
 
-				vrDisplay.getFrameData( frameData );
-				pose = frameData.pose;
+			if ( state.orientation !== null ) {
 
-			} else if ( vrDisplay.getPose ) {
-
-				pose = vrDisplay.getPose();
+				object.quaternion.copy( state.orientation );
 
 			}
 
-			if ( pose.orientation !== null ) {
+			if ( state.position !== null ) {
 
-				object.quaternion.fromArray( pose.orientation );
-
-			}
-
-			if ( pose.position !== null ) {
-
-				object.position.fromArray( pose.position );
-
-			} else {
-
-				object.position.set( 0, 0, 0 );
+				object.position.copy( state.position ).multiplyScalar( scope.scale );
 
 			}
-
-			if ( this.standing ) {
-
-				if ( vrDisplay.stageParameters ) {
-
-					object.updateMatrix();
-
-					standingMatrix.fromArray( vrDisplay.stageParameters.sittingToStandingTransform );
-					object.applyMatrix( standingMatrix );
-
-				} else {
-
-					object.position.setY( object.position.y + this.userHeight );
-
-				}
-
-			}
-
-			object.position.multiplyScalar( scope.scale );
 
 		}
 
 	};
 
-	this.dispose = function () {
+	this.resetSensor = function () {
 
-		vrDisplay = null;
+		for ( var i = 0; i < vrInputs.length; i ++ ) {
+
+			var vrInput = vrInputs[ i ];
+
+			if ( vrInput.resetSensor !== undefined ) {
+
+				vrInput.resetSensor();
+
+			} else if ( vrInput.zeroSensor !== undefined ) {
+
+				vrInput.zeroSensor();
+
+			}
+
+		}
+
+	};
+
+	this.zeroSensor = function () {
+
+		console.warn( 'THREE.VRControls: .zeroSensor() is now .resetSensor().' );
+		this.resetSensor();
 
 	};
 
